@@ -1,14 +1,6 @@
-# Verified working with Python 3.11 on Windows.
-#
-# mediapipe 0.10.14 still ships the legacy `mp.solutions` API (Pose, Hands, drawing_utils).
-# tensorflow 2.15.1 is the version models/bilstm_attention.keras was saved with. Keep numpy < 2 for TF 2.15 / mediapipe 0.10.14.
-# Note: mediapipe also pulls in opencv-contrib-python, which provides the same cv2 module.
+# Python 3.11 required. Keep these exact versions.
 tensorflow==2.15.1
 keras==2.15.0
 mediapipe==0.10.14
 opencv-python==4.9.0.80
 numpy>=1.26,<2
-h5py>=3.8
-scikit-learn
-matplotlib
-jupyter
