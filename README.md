@@ -1,7 +1,8 @@
 # Yoga Asana Detection
 
 Real-time yoga posture recognition from an ordinary webcam.
-The system detects the body with MediaPipe Pose and classifies the posture with a BiLSTM + Attention model.
+The system detects the body with MediaPipe Pose and classifies the posture with a trained neural network.
+You choose an asana and a hold time with hand gestures, and a timer runs only while you hold the asana correctly.
 
 **Recognised asanas:** Extended Side Angle Pose, High Lunge, Low Lunge, Pyramid Pose
 
@@ -11,11 +12,15 @@ The system detects the body with MediaPipe Pose and classifies the posture with 
 
 ```
 yoga_Asana_Detection/
-├── run.py                              Ready-to-run application (webcam, video or image)
+├── run.py                              Ready-to-run application (live webcam)
 ├── requirements.txt                    Python dependencies (pinned versions)
+├── data/
+│   └── poses/*.npy                     Recorded landmarks, used to draw the reference pose
 └── models/
-    ├── bilstm_attention.keras          Trained model
-    └── bilstm_attention_labels.npy     Class labels
+    ├── model_001.h5                    Model used by run.py
+    ├── labels_001.npy                  Class labels used by run.py
+    ├── bilstm_attention.keras          BiLSTM + Attention model (from the paper)
+    └── bilstm_attention_labels.npy     Its class labels
 ```
 
 ## Requirements
@@ -102,28 +107,27 @@ Expected output: `2.15.1 0.10.14`
 
 Make sure the virtual environment is active (`(.venv)` in your prompt), then:
 
-| Mode | Command |
-|---|---|
-| Live webcam | `python run.py` |
-| Another webcam | `python run.py --camera 1` |
-| Video file | `python run.py --video path/to/video.mp4` |
-| Single image | `python run.py --image path/to/photo.jpg` |
+```bash
+python run.py
+```
 
-Press **Esc** or **Q** to close the window.
+The window opens on the default webcam. Press **Esc** to quit.
 
-### How to use the live mode
+### How to use it
 
-1. Run `python run.py`. A window opens showing the camera feed.
-2. Step back until your **whole body, including both wrists and both ankles, is in the frame**.
-3. Hold one of the four asanas.
-4. The detected asana and its confidence are shown at the top of the window.
+1. **Choose an asana.** Show 1–4 fingers on one hand and hold them still for about 1.5 seconds. The panel on the right shows which number picks which asana. You can also press keys 1–4.
+2. **Choose a hold time.** Lower your hand, then show fingers for the time: 1 = 10 s, 2 = 20 s, 3 = 30 s, 4 = 45 s, 5 = 60 s (or press 1–5).
+3. **Get into position.** A 5-second countdown starts. Step back until your **whole body, including both wrists and both ankles, is in the frame**.
+4. **Hold the asana.** The right-hand panel shows the target pose. The timer only counts while the chosen asana is recognised with more than 75% confidence. If you lose the pose, it pauses and shows `Perform the asana correctly`.
+5. When the hold time is reached, `Asana Completed!` is shown and you go back to the menu after 3 seconds.
+
+**Going back a step:** press **B** or **Backspace**, or hold up both hands for 1.5 seconds. The two-hands gesture is ignored while your full body is in view during the pose, so raising your arms in an asana won't trigger it.
 
 | On-screen message | Meaning |
 |---|---|
-| `High Lunge (97%)` (green) | Asana recognised with confidence above 75% |
+| `Timer: 12s / 30s` (green) | Correct asana held, timer running |
+| `Perform the asana correctly` | The chosen asana isn't recognised with enough confidence. The timer is paused. |
 | `Make sure your full body is visible` | Wrists or ankles are out of frame. Step back. |
-| `Pose not recognised` | Body is visible but the posture doesn't match a trained asana closely enough |
-| `No person detected` | No body found in the frame |
 
 ---
 
@@ -131,12 +135,13 @@ Press **Esc** or **Q** to close the window.
 
 | Problem | Solution |
 |---|---|
-| `Could not open video source: 0` / no camera image | Close other apps using the camera (Zoom, Teams, Camera app). On Windows, allow camera access under **Settings → Privacy & security → Camera**. Try `--camera 1`. |
+| `Could not read a frame from the webcam` / no camera image | Close other apps using the camera (Zoom, Teams, Camera app). On Windows, allow camera access under **Settings → Privacy & security → Camera**. To use another camera, change `cv2.VideoCapture(0)` in `run.py` to `cv2.VideoCapture(1)`. |
+| Fingers not detected | Hold your hand up, palm facing the camera, fingers spread, in good light. Or use the number keys. |
 | `No module named tensorflow` (or `cv2`, `mediapipe`) | The virtual environment isn't active. Repeat the activate command from Step 2. |
 | Windows: `Could not install packages due to an OSError ... Long Path support`, then `No module named 'tensorflow.python'` | The folder path is too long for Windows. Move the project to a short path such as `C:\yoga_Asana_Detection`, delete `.venv` and repeat Steps 2–3. (Alternatively, enable long paths: https://pip.pypa.io/warnings/enable-long-paths) |
 | `pip` can't find `tensorflow==2.15.1` | You're not using Python 3.11. Recreate the virtual environment with Python 3.11. |
 | `AttributeError: module 'mediapipe' has no attribute 'solutions'` | A newer MediaPipe is installed. Run `pip install mediapipe==0.10.14`. |
-| Predictions flicker or stay at "Pose not recognised" | Improve lighting, wear clothing that contrasts with the background, and keep the whole body in view. |
+| Timer stays paused at "Perform the asana correctly" | Improve lighting, wear clothing that contrasts with the background, and keep the whole body in view. |
 
 ---
 
@@ -145,23 +150,9 @@ Press **Esc** or **Q** to close the window.
 | | |
 |---|---|
 | Pose estimation | MediaPipe Pose, 33 body landmarks per frame |
-| Model input | 33 × (x, y) landmarks, relative to the nose and normalised by torso length |
-| Architecture | Joint embedding → BiLSTM (64) → additive attention over joints → softmax |
+| Gesture input | MediaPipe Hands, finger count held steady for 1.5 s |
+| Model | `models/model_001.h5` with `models/labels_001.npy` |
+| Model input | 33 × (x, y) landmarks, relative to the nose |
 | Output | One of 4 asanas plus a confidence score |
-| Confidence threshold | 0.75 (set by `CONFIDENCE_THRESHOLD` in `run.py`) |
-
-### Using the model in your own code
-
-`run.py` can be imported directly:
-
-```python
-import cv2
-from run import AsanaClassifier
-
-clf = AsanaClassifier()
-frame = cv2.imread("photo.jpg")
-landmarks, label, confidence, message = clf.predict(frame)
-print(label or message, confidence)
-```
-
-The model uses a custom `Attention` layer defined in `run.py`. Importing `run` registers it, so the model can also be loaded with `keras.models.load_model("models/bilstm_attention.keras")` afterwards.
+| Timer threshold | Confidence above 0.75 for the chosen asana |
+| Reference pose | Median of the recorded landmarks in `data/poses/*.npy` |
